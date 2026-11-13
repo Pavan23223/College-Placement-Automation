@@ -1,0 +1,798 @@
+{
+  "name": "Placement 3 - Deadline Reminders",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 9
+            }
+          ]
+        }
+      },
+      "id": "c4fc1f91-a877-47b1-ad2a-afc665e6e5ef",
+      "name": "Daily at 9 AM",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        0,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "<N8N_DATA_TABLE_ID_PLACEMENT_COMPANIES>",
+          "cachedResultName": "placement_companies"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "status",
+              "keyValue": "Active"
+            }
+          ]
+        },
+        "returnAll": true
+      },
+      "id": "8ca5acad-aab0-4793-a9a5-31d68509f377",
+      "name": "Get Active Companies",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        288,
+        464
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [$input.first()];"
+      },
+      "id": "2f36884a-0578-4ec7-808d-a8496ae3e86d",
+      "name": "Current Company",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        736,
+        128
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "past",
+              "leftValue": "={{ String($json.deadline).slice(0, 10) < $now.setZone(\"Asia/Kolkata\").toISODate() }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "30c4b8ce-f9cb-49e0-8327-4192ea15ff62",
+      "name": "Deadline Passed?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        960,
+        128
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "<N8N_DATA_TABLE_ID_PLACEMENT_COMPANIES>",
+          "cachedResultName": "placement_companies"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "company_id",
+              "keyValue": "={{ $(\"Current Company\").first().json.company_id }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "status": "Closed"
+          },
+          "schema": [
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "e12124dd-73f9-4f9c-89ad-4843e2949d96",
+      "name": "Mark Company Closed",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        1184,
+        128
+      ]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "0e581e25-5270-4ece-8ad8-c040f0922114",
+      "name": "Loop Over Companies",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        512,
+        464
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $(\"Current Company\").first().json.spreadsheet_id }}"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Registration Status"
+        },
+        "options": {}
+      },
+      "id": "771a473e-6492-4116-aff1-c6765bf9b8a5",
+      "name": "Read Registration Status",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1184,
+        320
+      ],
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "<N8N_DATA_TABLE_ID_EMAIL_LOG>",
+          "cachedResultName": "placement_email_log"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "company_id",
+              "keyValue": "={{ $(\"Current Company\").first().json.company_id }}"
+            },
+            {
+              "keyName": "email_type",
+              "keyValue": "Reminder"
+            }
+          ]
+        },
+        "returnAll": true
+      },
+      "id": "f8fc5ff3-1538-4165-af64-6e3e01727848",
+      "name": "Get Sent Reminders",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        1408,
+        320
+      ],
+      "executeOnce": true,
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const co = $('Current Company').first().json;\nconst today = $now.setZone('Asia/Kolkata').toISODate();\nconst rows = $('Read Registration Status').all().map(i => i.json).filter(r => r && r.email_key && r.company_id === co.company_id);\nconst sentKeys = new Set($input.all().map(i => i.json.email_key).filter(Boolean));\nconst deadline = String(co.deadline).slice(0, 10);\nconst daysLeft = Math.max(0, Math.round(DateTime.fromISO(deadline).diff(DateTime.fromISO(today), 'days').days));\nconst out = [];\nfor (const r of rows) {\n  if (String(r.status).trim() !== 'Pending') continue;\n  const usn = String(r.usn).trim().toUpperCase();\n  const key = co.company_id + '|' + usn + '|Reminder|' + today;\n  if (sentKeys.has(key)) continue;\n  out.push({ json: {\n    reminder_key: key, email_key: r.email_key, company_id: co.company_id, usn, name: r.name, email: r.email,\n    reminders_sent: (parseInt(r.reminders_sent, 10) || 0) + 1, last_reminder_on: today, days_left: daysLeft\n  } });\n}\nreturn out.length ? out : [{ json: { _noop: true, company_id: co.company_id } }];"
+      },
+      "id": "3091d050-805a-473f-9283-c13d25357f90",
+      "name": "Select Pending Students",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1632,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "pend",
+              "leftValue": "={{ $json._noop === true }}",
+              "rightValue": false,
+              "operator": {
+                "type": "boolean",
+                "operation": "false",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "539b9a50-dcff-48dc-9aac-25507853b937",
+      "name": "Has Pending Students?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1856,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.email }}",
+        "subject": "=Reminder: {{ $(\"Current Company\").first().json.company_name }} registration closes {{ $(\"Current Company\").first().json.deadline }}",
+        "message": "=<p>Dear {{ $json.name }} ({{ $json.usn }}),</p><p>We have not yet received your confirmation for the <b>{{ $(\"Current Company\").first().json.company_name }}</b> - {{ $(\"Current Company\").first().json.job_role }} drive. {{ $json.days_left === 0 ? \"Today is the last day.\" : $json.days_left + \" day(s) left.\" }}</p><p><b>Step 1 - Register on the company portal:</b> <a href=\"{{ $(\"Current Company\").first().json.registration_url }}\">{{ $(\"Current Company\").first().json.registration_url }}</a><br><b>Step 2 - Confirm with the placement cell:</b> <a href=\"{{ $(\"Current Company\").first().json.form_url }}\">{{ $(\"Current Company\").first().json.form_url }}</a></p><p>Deadline: {{ $(\"Current Company\").first().json.deadline }}. If you are not interested, choose \"No\" in the form and you will not get further reminders.</p><p>Regards,<br>Training &amp; Placement Cell</p>",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "8c5f5240-8e9f-4b99-8e34-856769221547",
+      "name": "Send Reminder Email",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        2080,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "dataTableId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "<N8N_DATA_TABLE_ID_EMAIL_LOG>",
+          "cachedResultName": "placement_email_log"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "email_key": "={{ $(\"Select Pending Students\").item.json.reminder_key }}",
+            "company_id": "={{ $(\"Select Pending Students\").item.json.company_id }}",
+            "usn": "={{ $(\"Select Pending Students\").item.json.usn }}",
+            "student_email": "={{ $(\"Select Pending Students\").item.json.email }}",
+            "email_type": "Reminder",
+            "gmail_message_id": "={{ $json.id }}",
+            "sent_at": "={{ $now.setZone(\"Asia/Kolkata\").toISO() }}"
+          },
+          "schema": [
+            {
+              "id": "email_key",
+              "displayName": "email_key",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "company_id",
+              "displayName": "company_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "usn",
+              "displayName": "usn",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "student_email",
+              "displayName": "student_email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "email_type",
+              "displayName": "email_type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "gmail_message_id",
+              "displayName": "gmail_message_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "sent_at",
+              "displayName": "sent_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "5701523a-bb36-4c33-a634-74514a8f670e",
+      "name": "Log Reminder Sent",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        2304,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $(\"Current Company\").first().json.spreadsheet_id }}"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Email History"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "email_key": "={{ $json.email_key }}",
+            "company_id": "={{ $json.company_id }}",
+            "usn": "={{ $json.usn }}",
+            "email_type": "Reminder",
+            "gmail_message_id": "={{ $(\"Send Reminder Email\").item.json.id }}",
+            "sent_at": "={{ $now.setZone(\"Asia/Kolkata\").toISO() }}",
+            "student_email": "={{ $json.student_email }}"
+          },
+          "matchingColumns": [
+            "id"
+          ],
+          "schema": [
+            {
+              "id": "email_key",
+              "displayName": "email_key",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "company_id",
+              "displayName": "company_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "usn",
+              "displayName": "usn",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "student_email",
+              "displayName": "student_email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "email_type",
+              "displayName": "email_type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "gmail_message_id",
+              "displayName": "gmail_message_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "sent_at",
+              "displayName": "sent_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "createdAt",
+              "displayName": "createdAt",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "updatedAt",
+              "displayName": "updatedAt",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "cellFormat": "RAW"
+        }
+      },
+      "id": "db92cce1-c49d-4052-bc02-ea328b4d4570",
+      "name": "Write Reminder History",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        2528,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $(\"Current Company\").first().json.spreadsheet_id }}"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Registration Status"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "email_key": "={{ $(\"Select Pending Students\").item.json.email_key }}",
+            "reminders_sent": "={{ $(\"Select Pending Students\").item.json.reminders_sent }}",
+            "last_reminder_on": "={{ $(\"Select Pending Students\").item.json.last_reminder_on }}"
+          },
+          "matchingColumns": [
+            "email_key"
+          ],
+          "schema": [
+            {
+              "id": "email_key",
+              "displayName": "email_key",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "reminders_sent",
+              "displayName": "reminders_sent",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "last_reminder_on",
+              "displayName": "last_reminder_on",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ]
+        },
+        "options": {
+          "cellFormat": "RAW"
+        }
+      },
+      "id": "8876f7b6-ba42-4d2b-92da-e53df42fe7d8",
+      "name": "Update Reminder Count",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        2752,
+        416
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Daily at 9 AM": {
+      "main": [
+        [
+          {
+            "node": "Get Active Companies",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Active Companies": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Companies",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Current Company": {
+      "main": [
+        [
+          {
+            "node": "Deadline Passed?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Deadline Passed?": {
+      "main": [
+        [
+          {
+            "node": "Mark Company Closed",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Read Registration Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Company Closed": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Companies",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Companies": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Current Company",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Registration Status": {
+      "main": [
+        [
+          {
+            "node": "Get Sent Reminders",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Sent Reminders": {
+      "main": [
+        [
+          {
+            "node": "Select Pending Students",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Select Pending Students": {
+      "main": [
+        [
+          {
+            "node": "Has Pending Students?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Pending Students?": {
+      "main": [
+        [
+          {
+            "node": "Send Reminder Email",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Loop Over Companies",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Reminder Email": {
+      "main": [
+        [
+          {
+            "node": "Log Reminder Sent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Reminder Sent": {
+      "main": [
+        [
+          {
+            "node": "Write Reminder History",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write Reminder History": {
+      "main": [
+        [
+          {
+            "node": "Update Reminder Count",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Reminder Count": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Companies",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timezone": "Asia/Kolkata"
+  },
+  "versionId": "17670cf5-801d-4533-b9e7-3d3feb22ac37",
+  "meta": {
+    "instanceId": "31a7e414baaffa8030187dcb8248d1a76e9c265ebc5b7ae1110474fb7a526eaa"
+  },
+  "nodeGroups": [
+    {
+      "id": "c31d95ca-3d8c-43af-8ba2-383d655b1b1e",
+      "name": "Send deadline reminders",
+      "nodeIds": [
+        "8ca5acad-aab0-4793-a9a5-31d68509f377",
+        "0e581e25-5270-4ece-8ad8-c040f0922114",
+        "2f36884a-0578-4ec7-808d-a8496ae3e86d",
+        "30c4b8ce-f9cb-49e0-8327-4192ea15ff62",
+        "e12124dd-73f9-4f9c-89ad-4843e2949d96",
+        "771a473e-6492-4116-aff1-c6765bf9b8a5",
+        "f8fc5ff3-1538-4165-af64-6e3e01727848",
+        "3091d050-805a-473f-9283-c13d25357f90",
+        "539b9a50-dcff-48dc-9aac-25507853b937",
+        "8c5f5240-8e9f-4b99-8e34-856769221547",
+        "5701523a-bb36-4c33-a634-74514a8f670e",
+        "db92cce1-c49d-4052-bc02-ea328b4d4570",
+        "8876f7b6-ba42-4d2b-92da-e53df42fe7d8"
+      ],
+      "description": "Daily: closes drives past their deadline (no emails), otherwise emails only Pending students, at most once per day each"
+    }
+  ],
+  "id": "ed5Gpj7qujEaqdRO",
+  "tags": []
+}

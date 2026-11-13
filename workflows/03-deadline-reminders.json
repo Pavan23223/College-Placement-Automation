@@ -1,0 +1,510 @@
+{
+  "name": "Placement 2 - Registration Status Sync",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 15
+            }
+          ]
+        }
+      },
+      "id": "6e240554-fac6-4dcc-88dc-9977050f261a",
+      "name": "Every 15 Minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "<N8N_DATA_TABLE_ID_PLACEMENT_COMPANIES>",
+          "cachedResultName": "placement_companies"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "status",
+              "keyValue": "Active"
+            }
+          ]
+        },
+        "returnAll": true
+      },
+      "id": "0e474f4a-4b62-489b-b96a-04fd8332eaa6",
+      "name": "Get Active Companies",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        272,
+        272
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [$input.first()];"
+      },
+      "id": "0347f19e-1f39-40c3-9328-df871c8c0e70",
+      "name": "Current Company",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        496,
+        128
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://forms.googleapis.com/v1/forms/{{ $json.form_id }}/responses",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "options": {}
+      },
+      "id": "516281a2-e5b7-4924-a174-bd4768a9b491",
+      "name": "Get Form Responses",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        720,
+        128
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $(\"Current Company\").first().json.spreadsheet_id }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Registration Status",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "2fc06235-d209-43c0-b800-b7aa8f5a6fbd",
+      "name": "Read Registration Status",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        944,
+        128
+      ],
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Loop over input items and add a new field called 'myNewField' to the JSON of each one\nfor (const item of $input.all()) {\n  item.json.myNewField = 1;\n}\n\nreturn $input.all();"
+      },
+      "id": "e66ba91f-f7de-42fd-af07-797fba5f5a90",
+      "name": "Match Responses To Students",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1168,
+        128
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "upd",
+              "leftValue": "={{ $json._noop === true }}",
+              "rightValue": false,
+              "operator": {
+                "type": "boolean",
+                "operation": "false",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "d36ece8e-57fa-4969-86e2-1bccb59ddd33",
+      "name": "Has Status Changes?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1360,
+        128
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $(\"Current Company\").first().json.spreadsheet_id }}\n",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Registration Status",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "email_key": "={{ $json.email_key }}",
+            "company_id": "={{ $json.company_id }}",
+            "email": "={{ $json.email }}",
+            "status": "={{ $json.status }}",
+            "student_confirmation": "={{ $json.student_confirmation }}",
+            "confirmed_at": "={{ $json.confirmed_at }}",
+            "response_id": "={{ $json.response_id }}",
+            "reminders_sent": "={{ $json.last_reminder_on }}",
+            "last_updated": "={{ $json.last_updated }}",
+            "last_reminder_on": "={{ $json.last_reminder_on }}",
+            "note": "={{ $json.note }}",
+            "department": "={{ $json.department }}"
+          },
+          "matchingColumns": [
+            "email_key"
+          ],
+          "schema": [
+            {
+              "id": "email_key",
+              "displayName": "email_key",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "company_id",
+              "displayName": "company_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "usn",
+              "displayName": "usn",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "name",
+              "displayName": "name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "email",
+              "displayName": "email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "department",
+              "displayName": "department",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "student_confirmation",
+              "displayName": "student_confirmation",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "confirmed_at",
+              "displayName": "confirmed_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "response_id",
+              "displayName": "response_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "reminders_sent",
+              "displayName": "reminders_sent",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "last_reminder_on",
+              "displayName": "last_reminder_on",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "last_updated",
+              "displayName": "last_updated",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "note",
+              "displayName": "note",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "02573ecc-d051-4e0b-b4d8-98d5be3588ff",
+      "name": "Update Registration Status",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1840,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "9dd0af4e-8079-44dd-9607-ec545b20fe7b",
+      "name": "Loop Over Companies",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        496,
+        272
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const company = $(\"Current Company\").first().json;\nconst responses = $(\"Get Form Responses\").first().json.responses || [];\n\nfunction getAnswer(response, questionId) {\n  return response.answers?.[questionId]?.textAnswers?.answers?.[0]?.value || \"\";\n}\n\nreturn $input.all().map(item => {\n  const student = item.json;\n\n  const response = responses.find(r =>\n    getAnswer(r, company.q_usn).trim().toUpperCase() ===\n    String(student.usn).trim().toUpperCase()\n  );\n\n  if (!response) {\n    return { json: student };\n  }\n\n  const confirmation = getAnswer(response, company.q_confirm);\n  const registered = confirmation.startsWith(\"Yes\");\n\n  return {\n    json: {\n      ...student,\n      status: registered ? \"Registered\" : \"Declined\",\n      student_confirmation: confirmation,\n      confirmed_at: registered ? new Date().toISOString() : \"\",\n      response_id: response.responseId || \"\",\n      last_updated: new Date().toISOString()\n    }\n  };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1616,
+        160
+      ],
+      "id": "3b8b2b96-bd7a-44b5-8ae6-caef213fe42c",
+      "name": "Code in JavaScript"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Every 15 Minutes": {
+      "main": [
+        [
+          {
+            "node": "Get Active Companies",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Active Companies": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Companies",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Current Company": {
+      "main": [
+        [
+          {
+            "node": "Get Form Responses",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Form Responses": {
+      "main": [
+        [
+          {
+            "node": "Read Registration Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Registration Status": {
+      "main": [
+        [
+          {
+            "node": "Match Responses To Students",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Match Responses To Students": {
+      "main": [
+        [
+          {
+            "node": "Has Status Changes?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Status Changes?": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Loop Over Companies",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Registration Status": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Companies",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Companies": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Current Company",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Update Registration Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timezone": "Asia/Kolkata"
+  },
+  "versionId": "ee70f067-4559-46dd-98cf-e1105bb6b604",
+  "meta": {
+    "instanceId": "31a7e414baaffa8030187dcb8248d1a76e9c265ebc5b7ae1110474fb7a526eaa"
+  },
+  "nodeGroups": [
+    {
+      "id": "847b5c07-3917-4bb8-ba83-7c25875dd11e",
+      "name": "Sync form responses",
+      "nodeIds": [
+        "0e474f4a-4b62-489b-b96a-04fd8332eaa6",
+        "9dd0af4e-8079-44dd-9607-ec545b20fe7b",
+        "0347f19e-1f39-40c3-9328-df871c8c0e70",
+        "516281a2-e5b7-4924-a174-bd4768a9b491",
+        "2fc06235-d209-43c0-b800-b7aa8f5a6fbd",
+        "e66ba91f-f7de-42fd-af07-797fba5f5a90",
+        "d36ece8e-57fa-4969-86e2-1bccb59ddd33",
+        "02573ecc-d051-4e0b-b4d8-98d5be3588ff",
+        "3b8b2b96-bd7a-44b5-8ae6-caef213fe42c"
+      ],
+      "description": "For each active drive, reads its own Google Form answers and updates only that company sheet; unlisted USNs are ignored"
+    }
+  ],
+  "id": "eMAvEaODUWpKcMbA",
+  "tags": []
+}

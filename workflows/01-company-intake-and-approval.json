@@ -1,0 +1,1807 @@
+{
+  "name": "AI Placement Assistant",
+  "nodes": [
+    {
+      "parameters": {
+        "formTitle": "New Placement Drive",
+        "formDescription": "Placement coordinator only. Enter the company drive details. Nothing is emailed to students until you approve the eligible list.",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Company Name",
+              "fieldName": "company_name",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Job Role",
+              "fieldName": "job_role",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Job Description",
+              "fieldType": "textarea",
+              "fieldName": "job_description",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Company Registration URL",
+              "fieldName": "registration_url",
+              "placeholder": "https://...",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Minimum CGPA",
+              "fieldType": "number",
+              "fieldName": "min_cgpa",
+              "placeholder": "e.g. 7.0",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Eligible Branches",
+              "fieldName": "eligible_branches",
+              "placeholder": "Comma separated, e.g. CSE, ISE, ECE (or ALL)",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Maximum Backlogs",
+              "fieldType": "number",
+              "fieldName": "max_backlogs",
+              "placeholder": "e.g. 0",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Graduation Year",
+              "fieldType": "number",
+              "fieldName": "graduation_year",
+              "placeholder": "e.g. 2027",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Registration Deadline",
+              "fieldType": "date",
+              "fieldName": "deadline",
+              "requiredField": true
+            }
+          ]
+        },
+        "options": {
+          "buttonLabel": "Find eligible students",
+          "path": "placement-company-intake"
+        }
+      },
+      "id": "efa40490-2d8f-4513-8416-da2a72efad81",
+      "name": "Company Details Form",
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.6,
+      "position": [
+        -688,
+        1072
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const f = $input.first().json;\nconst pick = (k, l) => (f[k] !== undefined && f[k] !== null && f[k] !== '') ? f[k] : f[l];\nconst company = String(pick('company_name', 'Company Name') || '').trim();\nconst role = String(pick('job_role', 'Job Role') || '').trim();\nconst jd = String(pick('job_description', 'Job Description') || '').trim();\nconst url = String(pick('registration_url', 'Company Registration URL') || '').trim();\nconst minCgpa = parseFloat(String(pick('min_cgpa', 'Minimum CGPA')).replace(/[^0-9.]/g, ''));\nconst maxBacklogs = parseInt(String(pick('max_backlogs', 'Maximum Backlogs')).replace(/[^0-9]/g, ''), 10);\nconst year = parseInt(String(pick('graduation_year', 'Graduation Year')).replace(/[^0-9]/g, ''), 10);\nconst deadline = String(pick('deadline', 'Registration Deadline') || '').slice(0, 10);\nconst today = $now.setZone('Asia/Kolkata').toISODate();\nconst errors = [];\nif (!company) errors.push('Company name is required');\nif (!role) errors.push('Job role is required');\nif (!/^https?:\\/\\//i.test(url)) errors.push('Registration URL must start with http(s)://');\nif (isNaN(minCgpa) || minCgpa < 0 || minCgpa > 10) errors.push('Minimum CGPA must be between 0 and 10');\nif (isNaN(maxBacklogs) || maxBacklogs < 0) errors.push('Maximum backlogs must be 0 or more');\nif (isNaN(year) || year < 2000 || year > 2100) errors.push('Graduation year must be a 4-digit year');\nif (!/^\\d{4}-\\d{2}-\\d{2}$/.test(deadline)) errors.push('Deadline must be a valid date');\nelse if (deadline < today) errors.push('Deadline ' + deadline + ' is already in the past');\nif (errors.length) throw new Error('Invalid company details: ' + errors.join('; '));\n\nconst branches = [...new Set(String(pick('eligible_branches', 'Eligible Branches') || '')\n  .split(/[,;\\/]+/).map(b => b.trim().toUpperCase()).filter(Boolean))];\nif (!branches.length) throw new Error('Invalid company details: at least one eligible branch is required');\nconst slug = s => s.toUpperCase().replace(/[^A-Z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 24);\nconst companyId = slug(company) + '-' + slug(role) + '-' + year;\n\nconst formDescription = company + ' - ' + role + '\\nCompany ID: ' + companyId +\n  '\\nDeadline: ' + deadline +\n  '\\n\\nFirst complete your registration on the company portal: ' + url +\n  '\\nThen submit this form to confirm. Note: this form records your confirmation only; the placement cell may verify registration with the company.';\nconst formRequests = [\n  { updateFormInfo: { info: { description: formDescription }, updateMask: 'description' } },\n  { createItem: { item: { title: 'USN', questionItem: { question: { required: true, textQuestion: {} } } }, location: { index: 0 } } },\n  { createItem: { item: { title: 'Full Name', questionItem: { question: { required: true, textQuestion: {} } } }, location: { index: 1 } } },\n  { createItem: { item: { title: 'College Email', questionItem: { question: { required: true, textQuestion: {} } } }, location: { index: 2 } } },\n  { createItem: { item: { title: 'Have you completed registration on the company portal?', questionItem: { question: { required: true, choiceQuestion: { type: 'RADIO', options: [ { value: 'Yes - I have registered on the company portal' }, { value: 'No - I am not interested in this drive' } ] } } } }, location: { index: 3 } } }\n];\n\nreturn [{ json: {\n  company_id: companyId, company_name: company, job_role: role, job_description: jd,\n  registration_url: url, min_cgpa: minCgpa, eligible_branches: branches.join(', '), branches,\n  max_backlogs: maxBacklogs, graduation_year: year, deadline, created_on: today,\n  form_requests: formRequests\n} }];"
+      },
+      "id": "7901fdb7-1894-4fa3-b1d2-6ecb68ebb57d",
+      "name": "Prepare Company Details",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -400,
+        1392
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "<N8N_DATA_TABLE_ID_PLACEMENT_COMPANIES>",
+          "cachedResultName": "placement_companies"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "company_id",
+              "keyValue": "={{ $json.company_id }}"
+            }
+          ]
+        },
+        "limit": 1
+      },
+      "id": "356206af-3318-4224-b2dd-04581bed30db",
+      "name": "Check Existing Company",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -176,
+        1392
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "new",
+              "leftValue": "={{ $json.company_id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "empty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "4d7156b0-b0be-4b94-97a0-f07bd69e1d02",
+      "name": "Is New Company?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        48,
+        1392
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "<GOOGLE_SHEET_ID_MASTER_STUDENTS>",
+          "cachedResultName": "Placement_Automation"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gid=0",
+          "cachedResultName": "Students"
+        },
+        "options": {}
+      },
+      "id": "dfb43bcb-340d-4919-8251-c130f915807b",
+      "name": "Read Master Students",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        272,
+        1296
+      ],
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const c = $('Prepare Company Details').first().json;\nconst rows = $input.all().map(i => i.json).filter(r => Object.keys(r).length > 0);\nconst col = (r, names) => { for (const n of names) { if (r[n] !== undefined && r[n] !== null && String(r[n]).trim() !== '') return r[n]; } return ''; };\nconst hasCol = names => rows.some(r => names.some(n => Object.prototype.hasOwnProperty.call(r, n)));\nconst statusCols = ['Placement_Status', 'Placement Status', 'PlacementStatus'];\nconst yearCols = ['Graduation_Year', 'Graduation Year', 'GraduationYear', 'Passing_Year', 'Batch'];\nconst hasStatus = hasCol(statusCols);\nconst hasYear = hasCol(yearCols);\nconst blocked = ['placed', 'opted out', 'opted-out', 'debarred', 'blocked', 'not interested'];\nconst allBranches = c.branches.includes('ALL');\nconst seen = new Set();\nconst students = [];\nlet excluded = 0;\nfor (const r of rows) {\n  const usn = String(col(r, ['USN'])).trim().toUpperCase();\n  const email = String(col(r, ['Email'])).trim();\n  if (!usn || seen.has(usn) || !/^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$/.test(email)) { excluded++; continue; }\n  const dept = String(col(r, ['Department'])).trim().toUpperCase();\n  const cgpa = parseFloat(String(col(r, ['CGPA'])).replace(/[^0-9.]/g, ''));\n  const backlogs = parseInt(String(col(r, ['Backlogs']) || '0').replace(/[^0-9]/g, '') || '0', 10);\n  const status = String(col(r, statusCols)).trim().toLowerCase();\n  const year = parseInt(String(col(r, yearCols)).replace(/[^0-9]/g, ''), 10);\n  const ok = (allBranches || c.branches.includes(dept))\n    && !isNaN(cgpa) && cgpa >= c.min_cgpa\n    && backlogs <= c.max_backlogs\n    && !blocked.includes(status)\n    && (!hasYear || year === c.graduation_year);\n  if (!ok) { excluded++; continue; }\n  seen.add(usn);\n  students.push({ usn, name: String(col(r, ['Student_Name', 'Name'])).trim(), email, department: dept, cgpa, backlogs });\n}\nconst warnings = [];\nif (!hasStatus) warnings.push('No Placement Status column found in the master sheet - placement status was NOT checked.');\nif (!hasYear) warnings.push('No Graduation Year column found in the master sheet - graduation year was NOT checked.');\nconst esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst previewRows = students.slice(0, 150).map(s => '<tr><td>' + esc(s.usn) + '</td><td>' + esc(s.name) + '</td><td>' + esc(s.department) + '</td><td>' + s.cgpa + '</td><td>' + s.backlogs + '</td><td>' + esc(s.email) + '</td></tr>').join('');\nconst previewHtml = '<table border=\"1\" cellpadding=\"4\" cellspacing=\"0\"><tr><th>USN</th><th>Name</th><th>Dept</th><th>CGPA</th><th>Backlogs</th><th>Email</th></tr>' + previewRows + '</table>' + (students.length > 150 ? '<p>...and ' + (students.length - 150) + ' more</p>' : '');\nreturn [{ json: { company_id: c.company_id, eligible_count: students.length, total_students: rows.length, excluded_count: excluded, warnings, warnings_html: warnings.map(w => '<p style=\"color:#b45309\"><b>Warning:</b> ' + w + '</p>').join(''), preview_html: previewHtml, students } }];"
+      },
+      "id": "1ae994dc-febb-4c50-a15c-8ac4d9e9a235",
+      "name": "Find Eligible Students",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        496,
+        1296
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "count",
+              "leftValue": "={{ $json.eligible_count }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "ac39e3ec-2452-4fdc-9a23-c0693e546567",
+      "name": "Has Eligible Students?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        720,
+        1296
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "sendAndWait",
+        "sendTo": "<COORDINATOR_EMAIL>",
+        "subject": "=Approve {{ $json.eligible_count }} students for {{ $(\"Prepare Company Details\").first().json.company_name }} ({{ $json.company_id }})",
+        "message": "=<h3>{{ $(\"Prepare Company Details\").first().json.company_name }} - {{ $(\"Prepare Company Details\").first().json.job_role }}</h3><p>Company ID: <b>{{ $json.company_id }}</b><br>Min CGPA: {{ $(\"Prepare Company Details\").first().json.min_cgpa }} | Branches: {{ $(\"Prepare Company Details\").first().json.eligible_branches }} | Max backlogs: {{ $(\"Prepare Company Details\").first().json.max_backlogs }} | Graduation year: {{ $(\"Prepare Company Details\").first().json.graduation_year }}<br>Deadline: {{ $(\"Prepare Company Details\").first().json.deadline }}<br>Registration URL: {{ $(\"Prepare Company Details\").first().json.registration_url }}</p>{{ $json.warnings_html }}<p><b>{{ $json.eligible_count }}</b> eligible of {{ $json.total_students }} students. Approving creates the company spreadsheet and Google Form and emails each listed student individually. Declining sends nothing.</p>{{ $json.preview_html }}",
+        "approvalOptions": {
+          "values": {
+            "approvalType": "double",
+            "approveLabel": "Approve and send",
+            "disapproveLabel": "Reject"
+          }
+        },
+        "options": {
+          "limitWaitTime": {
+            "values": {
+              "resumeAmount": 2,
+              "resumeUnit": "days"
+            }
+          },
+          "appendAttribution": false
+        }
+      },
+      "id": "6d7be419-9aca-4a27-aa4b-a74bd0d63df5",
+      "name": "Request Coordinator Approval",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        944,
+        1200
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "approved",
+              "leftValue": "={{ $json.data && $json.data.approved === true }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "68df1ab3-b850-42ad-96bc-02968d1f79d6",
+      "name": "Approved?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1168,
+        1200
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "folder",
+        "name": "={{ $(\"Prepare Company Details\").first().json.company_name }} - {{ $(\"Prepare Company Details\").first().json.company_id }}",
+        "driveId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "root",
+          "mode": "list",
+          "cachedResultName": "/ (Root folder)",
+          "cachedResultUrl": "https://drive.google.com/drive"
+        },
+        "options": {}
+      },
+      "id": "c6b2f756-d940-42c1-8507-7efe7f2e00ce",
+      "name": "Create Company Folder",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        208,
+        1200
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "spreadsheet",
+        "title": "={{ $(\"Prepare Company Details\").first().json.company_name }} - {{ $(\"Prepare Company Details\").first().json.company_id }} - Placement Tracker",
+        "sheetsUi": {
+          "sheetValues": [
+            {
+              "title": "Company Details"
+            },
+            {
+              "title": "Eligible Students"
+            },
+            {
+              "title": "Registration Status"
+            },
+            {
+              "title": "Email History"
+            },
+            {
+              "title": "Registration Report"
+            }
+          ]
+        },
+        "options": {
+          "locale": "en_US"
+        }
+      },
+      "id": "3af546a5-d2ae-4f6f-9be4-34916ce142cc",
+      "name": "Create Company Spreadsheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        432,
+        1200
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://forms.googleapis.com/v1/forms",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{\n  {\n    info: {\n      title: $('Prepare Company Details').first().json.company_name\n        + ' - '\n        + $('Prepare Company Details').first().json.job_role\n        + ' Registration Confirmation',\n      documentTitle: $('Prepare Company Details').first().json.company_id\n        + ' - Registration Confirmation'\n    }\n  }\n}}",
+        "options": {}
+      },
+      "id": "29aa9e6f-8a6c-47b3-bf86-372d7bcc4972",
+      "name": "Create Google Form",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        656,
+        1200
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://forms.googleapis.com/v1/forms/{{ $json.formId }}:batchUpdate",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  includeFormInResponse: false,\n  requests: [\n    ...$(\"Prepare Company Details\").first().json.form_requests,\n    {\n      updateSettings: {\n        settings: {\n          emailCollectionType: \"VERIFIED\"\n        },\n        updateMask: \"emailCollectionType\"\n      }\n    }\n  ]\n}) }}",
+        "options": {}
+      },
+      "id": "1d90f310-2935-440e-9ca9-f8e852d8b3a9",
+      "name": "Add Form Questions",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        880,
+        1200
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "move",
+        "fileId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $(\"Create Company Spreadsheet\").first().json.spreadsheetId }}"
+        },
+        "driveId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $(\"Create Company Folder\").first().json.id }}"
+        }
+      },
+      "id": "1da077c1-854f-4a87-a3f6-ea4a364611e8",
+      "name": "Move Spreadsheet to Folder",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        1104,
+        1200
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "move",
+        "fileId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $(\"Create Google Form\").first().json.formId }}"
+        },
+        "driveId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $(\"Create Company Folder\").first().json.id }}"
+        }
+      },
+      "id": "25a780c0-1534-4868-b3ab-f0a6460b2762",
+      "name": "Move Form to Folder",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        1328,
+        1200
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const c = $('Prepare Company Details').first().json;\nconst ss = $('Create Company Spreadsheet').first().json;\nconst form = $('Create Google Form').first().json;\nconst replies = $('Add Form Questions').first().json.replies || [];\nconst qid = i => (replies[i] && replies[i].createItem && replies[i].createItem.questionId && replies[i].createItem.questionId[0]) || '';\nconst el = $('Find Eligible Students').first().json;\nreturn [{ json: {\n  company_id: c.company_id, company_name: c.company_name, job_role: c.job_role, job_description: c.job_description,\n  registration_url: c.registration_url, min_cgpa: c.min_cgpa, eligible_branches: c.eligible_branches,\n  max_backlogs: c.max_backlogs, graduation_year: c.graduation_year, deadline: c.deadline,\n  spreadsheet_id: ss.spreadsheetId, spreadsheet_url: ss.spreadsheetUrl,\n  form_id: form.formId, form_url: form.responderUri,\n  q_usn: qid(1), q_name: qid(2), q_email: qid(3), q_confirm: qid(4),\n  folder_id: $('Create Company Folder').first().json.id,\n  eligible_count: el.eligible_count, status: 'Active', created_on: c.created_on,\n  approved_at: $now.setZone('Asia/Kolkata').toISO()\n} }];"
+      },
+      "id": "18d1c713-e410-477b-861f-19fc99f101b3",
+      "name": "Build Company Record",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1552,
+        1200
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $(\"Build Company Record\").first().json.spreadsheet_id }}"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Company Details"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "schema": []
+        },
+        "options": {
+          "cellFormat": "RAW"
+        }
+      },
+      "id": "e0db9817-1c10-4f4e-a3e5-5257d06491cd",
+      "name": "Write Company Details",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1776,
+        1200
+      ]
+    },
+    {
+      "parameters": {
+        "dataTableId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "<N8N_DATA_TABLE_ID_PLACEMENT_COMPANIES>",
+          "cachedResultName": "placement_companies"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "company_id": "={{ $(\"Build Company Record\").first().json.company_id }}",
+            "company_name": "={{ $(\"Build Company Record\").first().json.company_name }}",
+            "job_role": "={{ $(\"Build Company Record\").first().json.job_role }}",
+            "job_description": "={{ $(\"Build Company Record\").first().json.job_description }}",
+            "registration_url": "={{ $(\"Build Company Record\").first().json.registration_url }}",
+            "min_cgpa": "={{ $(\"Build Company Record\").first().json.min_cgpa }}",
+            "eligible_branches": "={{ $(\"Build Company Record\").first().json.eligible_branches }}",
+            "max_backlogs": "={{ $(\"Build Company Record\").first().json.max_backlogs }}",
+            "graduation_year": "={{ $(\"Build Company Record\").first().json.graduation_year }}",
+            "deadline": "={{ $(\"Build Company Record\").first().json.deadline }}",
+            "spreadsheet_id": "={{ $(\"Build Company Record\").first().json.spreadsheet_id }}",
+            "spreadsheet_url": "={{ $(\"Build Company Record\").first().json.spreadsheet_url }}",
+            "form_id": "={{ $(\"Build Company Record\").first().json.form_id }}",
+            "form_url": "={{ $(\"Build Company Record\").first().json.form_url }}",
+            "q_usn": "={{ $(\"Build Company Record\").first().json.q_usn }}",
+            "q_name": "={{ $(\"Build Company Record\").first().json.q_name }}",
+            "q_email": "={{ $(\"Build Company Record\").first().json.q_email }}",
+            "q_confirm": "={{ $(\"Build Company Record\").first().json.q_confirm }}",
+            "folder_id": "={{ $(\"Build Company Record\").first().json.folder_id }}",
+            "eligible_count": "={{ $(\"Build Company Record\").first().json.eligible_count }}",
+            "status": "Active",
+            "created_on": "={{ $(\"Build Company Record\").first().json.created_on }}"
+          },
+          "schema": [
+            {
+              "id": "company_id",
+              "displayName": "company_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "company_name",
+              "displayName": "company_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "job_role",
+              "displayName": "job_role",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "job_description",
+              "displayName": "job_description",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "registration_url",
+              "displayName": "registration_url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "min_cgpa",
+              "displayName": "min_cgpa",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "eligible_branches",
+              "displayName": "eligible_branches",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "max_backlogs",
+              "displayName": "max_backlogs",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "graduation_year",
+              "displayName": "graduation_year",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "deadline",
+              "displayName": "deadline",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "spreadsheet_id",
+              "displayName": "spreadsheet_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "spreadsheet_url",
+              "displayName": "spreadsheet_url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "form_id",
+              "displayName": "form_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "form_url",
+              "displayName": "form_url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "q_usn",
+              "displayName": "q_usn",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "q_name",
+              "displayName": "q_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "q_email",
+              "displayName": "q_email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "q_confirm",
+              "displayName": "q_confirm",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "folder_id",
+              "displayName": "folder_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "eligible_count",
+              "displayName": "eligible_count",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "created_on",
+              "displayName": "created_on",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "085c5360-052d-4895-911f-104e48ffdc14",
+      "name": "Register Company",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        2000,
+        1200
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const rec = $('Build Company Record').first().json;\nconst students = $('Find Eligible Students').first().json.students || [];\nconst now = $now.setZone('Asia/Kolkata').toISO();\nreturn students.map(s => ({ json: {\n  email_key: rec.company_id + '|' + s.usn,\n  company_id: rec.company_id,\n  usn: s.usn, name: s.name, email: s.email, department: s.department,\n  cgpa: s.cgpa, backlogs: s.backlogs, added_on: now\n} }));"
+      },
+      "id": "2a413f78-8221-4ecf-92a3-a9ad74104427",
+      "name": "Build Student Rows",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2224,
+        1200
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $(\"Build Company Record\").first().json.spreadsheet_id }}"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Eligible Students"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "schema": []
+        },
+        "options": {
+          "cellFormat": "RAW"
+        }
+      },
+      "id": "66cc67a7-5236-4dd0-a5e8-75150b7da014",
+      "name": "Write Eligible Students",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        2448,
+        1200
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const now = $now.setZone('Asia/Kolkata').toISO();\nreturn $('Build Student Rows').all().map(i => ({ json: {\n  email_key: i.json.email_key, company_id: i.json.company_id, usn: i.json.usn, name: i.json.name,\n  email: i.json.email, department: i.json.department,\n  status: 'Pending', student_confirmation: '', confirmed_at: '', response_id: '',\n  reminders_sent: 0, last_reminder_on: '', last_updated: now,\n  note: 'Form confirmation only - not proof of registration on the company portal'\n} }));"
+      },
+      "id": "38102793-716d-4cde-a540-b3f0cf41aae6",
+      "name": "Build Status Rows",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2672,
+        1200
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $(\"Build Company Record\").first().json.spreadsheet_id }}"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Registration Status"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "email_key",
+              "displayName": "email_key",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "company_id",
+              "displayName": "company_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "usn",
+              "displayName": "usn",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "name",
+              "displayName": "name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "email",
+              "displayName": "email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "department",
+              "displayName": "department",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "student_confirmation",
+              "displayName": "student_confirmation",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "confirmed_at",
+              "displayName": "confirmed_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "response_id",
+              "displayName": "response_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "reminders_sent",
+              "displayName": "reminders_sent",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "last_reminder_on",
+              "displayName": "last_reminder_on",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "last_updated",
+              "displayName": "last_updated",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "note",
+              "displayName": "note",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "cellFormat": "RAW"
+        }
+      },
+      "id": "91bad2f3-57ed-4df0-b3ec-952853bdaf26",
+      "name": "Write Registration Status",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        2896,
+        1200
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return $('Build Student Rows').all().map(i => ({ json: i.json }));"
+      },
+      "id": "c9636174-a1f0-46b3-8299-e7b64adabfde",
+      "name": "Prepare Student Emails",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3120,
+        1200
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "<COORDINATOR_EMAIL>",
+        "subject": "=Drive launched: {{ $(\"Build Company Record\").first().json.company_name }} ({{ $(\"Build Company Record\").first().json.company_id }})",
+        "message": "=<p>Announcement emails were processed for <b>{{ $(\"Build Student Rows\").all().length }}</b> approved students (students already in the email log were skipped).</p><p>Spreadsheet: <a href=\"{{ $(\"Build Company Record\").first().json.spreadsheet_url }}\">{{ $(\"Build Company Record\").first().json.spreadsheet_url }}</a><br>Student form: <a href=\"{{ $(\"Build Company Record\").first().json.form_url }}\">{{ $(\"Build Company Record\").first().json.form_url }}</a><br>Deadline: {{ $(\"Build Company Record\").first().json.deadline }}</p><p>Registration status syncs from the form automatically, and daily reminders go to pending students until the deadline.</p>",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "1835df7b-48ed-466f-ba69-0fae571827d3",
+      "name": "Send Coordinator Summary",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        2080,
+        1200
+      ],
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "<N8N_DATA_TABLE_ID_EMAIL_LOG>",
+          "cachedResultName": "placement_email_log"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "email_key",
+              "keyValue": "={{ $json.email_key }}"
+            }
+          ]
+        },
+        "limit": 1
+      },
+      "id": "b5518cf8-8d0b-4000-921c-00850699651e",
+      "name": "Check Email Log",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        2064,
+        1376
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "nolog",
+              "leftValue": "={{ $json.email_key }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "empty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "3477fede-f61a-426c-9268-b3c0225c4dd1",
+      "name": "Not Emailed Yet?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2336,
+        1440
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $(\"Loop Over Students\").item.json.email }}",
+        "subject": "=Placement Drive: {{ $(\"Build Company Record\").first().json.company_name }} - {{ $(\"Build Company Record\").first().json.job_role }} | Register by {{ $(\"Build Company Record\").first().json.deadline }}",
+        "message": "=<p>Dear {{ $(\"Loop Over Students\").item.json.name }} ({{ $(\"Loop Over Students\").item.json.usn }}),</p><p>You are eligible for the <b>{{ $(\"Build Company Record\").first().json.company_name }}</b> placement drive.</p><p><b>Role:</b> {{ $(\"Build Company Record\").first().json.job_role }}<br><b>Eligibility:</b> CGPA &ge; {{ $(\"Build Company Record\").first().json.min_cgpa }}, branches {{ $(\"Build Company Record\").first().json.eligible_branches }}, max backlogs {{ $(\"Build Company Record\").first().json.max_backlogs }}, graduating {{ $(\"Build Company Record\").first().json.graduation_year }}<br><b>Deadline:</b> {{ $(\"Build Company Record\").first().json.deadline }}</p><p><b>Job description:</b><br>{{ $(\"Build Company Record\").first().json.job_description }}</p><p><b>Step 1 - Register on the company portal:</b> <a href=\"{{ $(\"Build Company Record\").first().json.registration_url }}\">{{ $(\"Build Company Record\").first().json.registration_url }}</a><br><b>Step 2 - Confirm with the placement cell:</b> <a href=\"{{ $(\"Build Company Record\").first().json.form_url }}\">{{ $(\"Build Company Record\").first().json.form_url }}</a></p><p>Please complete both steps before the deadline.</p><p>Regards,<br>Training &amp; Placement Cell</p>",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "e22b8598-9444-4a6b-a599-8798f88af4fc",
+      "name": "Send Announcement Email",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        800,
+        1456
+      ]
+    },
+    {
+      "parameters": {
+        "dataTableId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "<N8N_DATA_TABLE_ID_EMAIL_LOG>",
+          "cachedResultName": "placement_email_log"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "email_key": "={{ $(\"Loop Over Students\").item.json.email_key }}",
+            "company_id": "={{ $(\"Loop Over Students\").item.json.company_id }}",
+            "usn": "={{ $(\"Loop Over Students\").item.json.usn }}",
+            "student_email": "={{ $(\"Loop Over Students\").item.json.email }}",
+            "email_type": "Announcement",
+            "gmail_message_id": "={{ $json.id }}",
+            "sent_at": "={{ $now.setZone(\"Asia/Kolkata\").toISO() }}"
+          },
+          "schema": [
+            {
+              "id": "email_key",
+              "displayName": "email_key",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "company_id",
+              "displayName": "company_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "usn",
+              "displayName": "usn",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "student_email",
+              "displayName": "student_email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "email_type",
+              "displayName": "email_type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "gmail_message_id",
+              "displayName": "gmail_message_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "sent_at",
+              "displayName": "sent_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "ea296c2b-f0e4-4c6b-8329-46a82750e973",
+      "name": "Log Email Sent",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        1120,
+        1376
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $(\"Build Company Record\").first().json.spreadsheet_id }}"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Email History"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "email_key": "={{ $(\"Loop Over Students\").item.json.email_key }}",
+            "company_id": "={{ $(\"Loop Over Students\").item.json.company_id }}",
+            "usn": "={{ $(\"Loop Over Students\").item.json.usn }}",
+            "email": "={{ $(\"Loop Over Students\").item.json.email }}",
+            "email_type": "Announcement",
+            "gmail_message_id": "={{ $(\"Send Announcement Email\").item.json.id }}",
+            "sent_at": "={{ $now.setZone(\"Asia/Kolkata\").toISO() }}"
+          },
+          "schema": [
+            {
+              "id": "email_key",
+              "displayName": "email_key",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "company_id",
+              "displayName": "company_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "usn",
+              "displayName": "usn",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "email",
+              "displayName": "email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "email_type",
+              "displayName": "email_type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "gmail_message_id",
+              "displayName": "gmail_message_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "sent_at",
+              "displayName": "sent_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ]
+        },
+        "options": {
+          "cellFormat": "RAW"
+        }
+      },
+      "id": "c67c4833-bb0e-4e83-818e-256e11bbacb0",
+      "name": "Write Email History",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1312,
+        1376
+      ]
+    },
+    {
+      "parameters": {
+        "amount": 2
+      },
+      "id": "3c6b8438-d81f-432a-b4dd-9ffe87e711cb",
+      "name": "Pause Between Emails",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1520,
+        1360
+      ]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "67e5a813-80d2-43e5-b77c-dff86652f390",
+      "name": "Loop Over Students",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        1776,
+        1200
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "<COORDINATOR_EMAIL>",
+        "subject": "=Not sent: {{ $(\"Prepare Company Details\").first().json.company_id }}",
+        "message": "=The eligible list for <b>{{ $(\"Prepare Company Details\").first().json.company_id }}</b> was rejected or the approval expired. Nothing was created and no student emails were sent. Submit the company form again to retry.",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "57948104-2794-4b61-95f3-c57921150d29",
+      "name": "Notify Not Approved",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        80,
+        1280
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "<COORDINATOR_EMAIL>",
+        "subject": "=No eligible students: {{ $(\"Prepare Company Details\").first().json.company_name }}",
+        "message": "=No students in the master database matched the criteria for <b>{{ $(\"Prepare Company Details\").first().json.company_id }}</b>. Nothing was created and no emails were sent.{{ $json.warnings_html }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "11d196b8-6618-4389-8921-8423d451d8e4",
+      "name": "Notify No Eligible Students",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        944,
+        1392
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "<COORDINATOR_EMAIL>",
+        "subject": "=Placement drive already exists: {{ $(\"Prepare Company Details\").first().json.company_id }}",
+        "message": "=A drive with Company ID <b>{{ $(\"Prepare Company Details\").first().json.company_id }}</b> already exists, so nothing new was created and no emails were sent.<br>Existing spreadsheet: {{ $json.spreadsheet_url }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "9dffc0e9-a207-4575-a5c2-11ff91c6d160",
+      "name": "Notify Duplicate Company",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        272,
+        1488
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Company Details Form": {
+      "main": [
+        [
+          {
+            "node": "Prepare Company Details",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Company Details": {
+      "main": [
+        [
+          {
+            "node": "Check Existing Company",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Existing Company": {
+      "main": [
+        [
+          {
+            "node": "Is New Company?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is New Company?": {
+      "main": [
+        [
+          {
+            "node": "Read Master Students",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Notify Duplicate Company",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Master Students": {
+      "main": [
+        [
+          {
+            "node": "Find Eligible Students",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find Eligible Students": {
+      "main": [
+        [
+          {
+            "node": "Has Eligible Students?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Eligible Students?": {
+      "main": [
+        [
+          {
+            "node": "Request Coordinator Approval",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Notify No Eligible Students",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Request Coordinator Approval": {
+      "main": [
+        [
+          {
+            "node": "Approved?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Approved?": {
+      "main": [
+        [
+          {
+            "node": "Create Company Folder",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Notify Not Approved",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Company Folder": {
+      "main": [
+        [
+          {
+            "node": "Create Company Spreadsheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Company Spreadsheet": {
+      "main": [
+        [
+          {
+            "node": "Create Google Form",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Google Form": {
+      "main": [
+        [
+          {
+            "node": "Add Form Questions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Add Form Questions": {
+      "main": [
+        [
+          {
+            "node": "Move Spreadsheet to Folder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Move Spreadsheet to Folder": {
+      "main": [
+        [
+          {
+            "node": "Move Form to Folder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Move Form to Folder": {
+      "main": [
+        [
+          {
+            "node": "Build Company Record",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Company Record": {
+      "main": [
+        [
+          {
+            "node": "Write Company Details",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write Company Details": {
+      "main": [
+        [
+          {
+            "node": "Register Company",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Register Company": {
+      "main": [
+        [
+          {
+            "node": "Build Student Rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Student Rows": {
+      "main": [
+        [
+          {
+            "node": "Write Eligible Students",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write Eligible Students": {
+      "main": [
+        [
+          {
+            "node": "Build Status Rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Status Rows": {
+      "main": [
+        [
+          {
+            "node": "Write Registration Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write Registration Status": {
+      "main": [
+        [
+          {
+            "node": "Prepare Student Emails",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Student Emails": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Students",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Email Log": {
+      "main": [
+        [
+          {
+            "node": "Not Emailed Yet?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Not Emailed Yet?": {
+      "main": [
+        [
+          {
+            "node": "Send Announcement Email",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Loop Over Students",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Announcement Email": {
+      "main": [
+        [
+          {
+            "node": "Log Email Sent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Email Sent": {
+      "main": [
+        [
+          {
+            "node": "Write Email History",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write Email History": {
+      "main": [
+        [
+          {
+            "node": "Pause Between Emails",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pause Between Emails": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Students",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Students": {
+      "main": [
+        [
+          {
+            "node": "Send Coordinator Summary",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Check Email Log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timezone": "Asia/Kolkata"
+  },
+  "versionId": "eaa953cd-dd5b-4b1f-9585-63e49999a366",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "31a7e414baaffa8030187dcb8248d1a76e9c265ebc5b7ae1110474fb7a526eaa"
+  },
+  "nodeGroups": [
+    {
+      "id": "71c838b2-853a-4965-80ae-bb06b8edd350",
+      "name": "Approve eligible students",
+      "nodeIds": [
+        "7901fdb7-1894-4fa3-b1d2-6ecb68ebb57d",
+        "356206af-3318-4224-b2dd-04581bed30db",
+        "4d7156b0-b0be-4b94-97a0-f07bd69e1d02",
+        "9dffc0e9-a207-4575-a5c2-11ff91c6d160",
+        "dfb43bcb-340d-4919-8251-c130f915807b",
+        "1ae994dc-febb-4c50-a15c-8ac4d9e9a235",
+        "ac39e3ec-2452-4fdc-9a23-c0693e546567",
+        "11d196b8-6618-4389-8921-8423d451d8e4",
+        "6d7be419-9aca-4a27-aa4b-a74bd0d63df5",
+        "68df1ab3-b850-42ad-96bc-02968d1f79d6"
+      ],
+      "description": "Validates the drive, blocks duplicate Company IDs, filters the read-only master sheet, then waits for coordinator approval"
+    },
+    {
+      "id": "e799db17-6002-46e3-bb0c-bbdead3422cf",
+      "name": "Set up company workspace",
+      "nodeIds": [
+        "c6b2f756-d940-42c1-8507-7efe7f2e00ce",
+        "3af546a5-d2ae-4f6f-9be4-34916ce142cc",
+        "29aa9e6f-8a6c-47b3-bf86-372d7bcc4972",
+        "1d90f310-2935-440e-9ca9-f8e852d8b3a9",
+        "1da077c1-854f-4a87-a3f6-ea4a364611e8",
+        "25a780c0-1534-4868-b3ab-f0a6460b2762",
+        "18d1c713-e410-477b-861f-19fc99f101b3",
+        "e0db9817-1c10-4f4e-a3e5-5257d06491cd",
+        "085c5360-052d-4895-911f-104e48ffdc14",
+        "2a413f78-8221-4ecf-92a3-a9ad74104427",
+        "66cc67a7-5236-4dd0-a5e8-75150b7da014",
+        "38102793-716d-4cde-a540-b3f0cf41aae6",
+        "91bad2f3-57ed-4df0-b3ec-952853bdaf26",
+        "c9636174-a1f0-46b3-8299-e7b64adabfde"
+      ],
+      "description": "Creates a Drive folder, tracker spreadsheet and confirmation form for this company only, then registers it"
+    },
+    {
+      "id": "fc8845aa-b5c0-4faa-8934-bc602dc231bc",
+      "name": "Email approved students",
+      "nodeIds": [
+        "67e5a813-80d2-43e5-b77c-dff86652f390",
+        "b5518cf8-8d0b-4000-921c-00850699651e",
+        "3477fede-f61a-426c-9268-b3c0225c4dd1",
+        "e22b8598-9444-4a6b-a599-8798f88af4fc",
+        "ea296c2b-f0e4-4c6b-8329-46a82750e973",
+        "c67c4833-bb0e-4e83-818e-256e11bbacb0",
+        "3c6b8438-d81f-432a-b4dd-9ffe87e711cb",
+        "1835df7b-48ed-466f-ba69-0fae571827d3"
+      ],
+      "description": "Sends one personal email per student, skipping any Company ID + USN already logged, then reports to the coordinator"
+    }
+  ],
+  "id": "qnI85t2jwtMvXryN",
+  "tags": []
+}

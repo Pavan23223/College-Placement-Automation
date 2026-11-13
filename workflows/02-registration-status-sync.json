@@ -1,0 +1,586 @@
+{
+  "name": "Placement 4 - Company Registration Reports",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 18
+            }
+          ]
+        }
+      },
+      "id": "f9ae0446-0304-471a-ad0f-4cf7f85006cf",
+      "name": "Daily at 6 PM",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "<N8N_DATA_TABLE_ID_PLACEMENT_COMPANIES>",
+          "cachedResultName": "placement_companies"
+        },
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "status",
+              "keyValue": "Active"
+            },
+            {
+              "keyName": "status",
+              "keyValue": "Closed"
+            }
+          ]
+        },
+        "returnAll": true
+      },
+      "id": "b1640909-c620-46b9-957a-ff9f9a00eb0b",
+      "name": "Get Companies To Report",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        272,
+        416
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const rows = $input.all().map(i => i.json).filter(r => r && r.company_id);\nconst esc = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;');\nconst body = rows.map(r => '<tr><td>' + esc(r.company_name) + '<br><small>' + esc(r.company_id) + '</small></td><td>' + esc(r.company_status) + '</td><td>' + esc(r.deadline) + '</td><td>' + r.eligible + '</td><td>' + r.student_confirmed + '</td><td>' + r.declined + '</td><td>' + r.pending + '</td><td>' + r.needs_review + '</td><td>' + esc(r.confirmation_rate) + '</td><td>' + esc(r.by_department) + '</td><td><a href=\"' + esc(r.spreadsheet_url) + '\">Sheet</a></td></tr>').join('');\nconst html = '<p>Company-wise registration report (' + $now.setZone('Asia/Kolkata').toFormat('dd LLL yyyy') + ')</p>'\n  + '<table border=\"1\" cellpadding=\"4\" cellspacing=\"0\"><tr><th>Company</th><th>Status</th><th>Deadline</th><th>Eligible</th><th>Confirmed</th><th>Declined</th><th>Pending</th><th>Needs review</th><th>Rate</th><th>By dept (confirmed/total)</th><th>Link</th></tr>' + body + '</table>'\n  + '<p><i>Confirmed = student confirmed via the placement form. Verify actual registrations with the company where required.</i></p>';\nreturn [{ json: { company_count: rows.length, html } }];"
+      },
+      "id": "8eb38c71-0ec2-4d38-8511-dccc0bb8b0c4",
+      "name": "Build Summary Email",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        720,
+        128
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "<COORDINATOR_EMAIL>",
+        "subject": "=Placement registration report - {{ $json.company_count }} drive(s) - {{ $now.setZone(\"Asia/Kolkata\").toFormat(\"dd LLL yyyy\") }}",
+        "message": "={{ $json.html }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "75e3f38c-55bb-4a40-a945-16330f6b4813",
+      "name": "Send Report Email",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        944,
+        128
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "closed",
+              "leftValue": "={{ $json.company_status }}",
+              "rightValue": "Closed",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "f7961326-6577-436e-a060-50ee304522be",
+      "name": "Closed Drives Only",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.2,
+      "position": [
+        720,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "<N8N_DATA_TABLE_ID_PLACEMENT_COMPANIES>",
+          "cachedResultName": "placement_companies"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "company_id",
+              "keyValue": "={{ $json.company_id }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "status": "Reported"
+          },
+          "schema": [
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "9088dd0d-6686-428e-8eb5-3341990d927e",
+      "name": "Mark Final Report Sent",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        944,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [$input.first()];"
+      },
+      "id": "7cbb2bd4-bcf8-413b-9f67-655d4c2c7c69",
+      "name": "Current Company",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        720,
+        512
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $(\"Current Company\").first().json.spreadsheet_id }}"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Registration Status"
+        },
+        "options": {}
+      },
+      "id": "67f61be1-99d8-40ca-9f80-691d8720c98f",
+      "name": "Read Registration Status",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        944,
+        512
+      ],
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst co = $('Current Company').first().json;\n\nconst rows = $input.all()\n  .map(i => i.json)\n  .filter(r => r && r.email_key && r.company_id === co.company_id);\n\nconst count = s => rows.filter(\n  r => String(r.status || '').trim() === s\n).length;\n\nconst confirmed = count('Registered');\n\nconst depts = {};\n\nfor (const r of rows) {\n  const d = String(r.department || 'NA').toUpperCase();\n\n  if (!depts[d]) {\n    depts[d] = { total: 0, confirmed: 0 };\n  }\n\n  depts[d].total++;\n\n  if (String(r.status || '').trim() === 'Registered') {\n    depts[d].confirmed++;\n  }\n}\n\nreturn [{\n  json: {\n    report_time: $now.setZone('Asia/Kolkata').toFormat('yyyy-MM-dd HH:mm'),\n    company_id: co.company_id,\n    company_name: co.company_name,\n    job_role: co.job_role,\n    deadline: String(co.deadline).slice(0, 10),\n    company_status: co.status,\n\n    eligible: rows.length,\n    student_confirmed: confirmed,\n    declined: count('Declined'),\n    pending: count('Pending'),\n    needs_review: count('Needs Review'),\n\n    confirmation_rate: rows.length\n      ? (confirmed / rows.length * 100).toFixed(1) + '%'\n      : '0%',\n\n    by_department: Object.keys(depts)\n      .sort()\n      .map(d => d + ': ' + depts[d].confirmed + '/' + depts[d].total)\n      .join('; '),\n\n    spreadsheet_url: co.spreadsheet_url,\n\n    note: 'Confirmations are student self-reports, not verified company registrations'\n  }\n}];\n"
+      },
+      "id": "ce4feda8-c142-485a-8761-d7fd36d798cb",
+      "name": "Compute Company Stats",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1168,
+        512
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $(\"Current Company\").first().json.spreadsheet_id }}"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Registration Report"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "report_time",
+              "displayName": "report_time",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "company_id",
+              "displayName": "company_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "company_name",
+              "displayName": "company_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "job_role",
+              "displayName": "job_role",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "deadline",
+              "displayName": "deadline",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "company_status",
+              "displayName": "company_status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "eligible",
+              "displayName": "eligible",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "student_confirmed",
+              "displayName": "student_confirmed",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "declined",
+              "displayName": "declined",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "pending",
+              "displayName": "pending",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "needs_review",
+              "displayName": "needs_review",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "confirmation_rate",
+              "displayName": "confirmation_rate",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "by_department",
+              "displayName": "by_department",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "spreadsheet_url",
+              "displayName": "spreadsheet_url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "note",
+              "displayName": "note",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "cellFormat": "RAW"
+        }
+      },
+      "id": "5928bb8c-3d62-4ecc-89e8-c19176d5de47",
+      "name": "Write Report Snapshot",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1392,
+        512
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [$('Compute Company Stats').first()];"
+      },
+      "id": "7c55284e-e7bc-40aa-bd23-9ba12b913f21",
+      "name": "Keep Stats",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1616,
+        592
+      ]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "ff850b5c-a960-4ab4-86c8-78bda429a13b",
+      "name": "Loop Over Companies",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        496,
+        416
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Daily at 6 PM": {
+      "main": [
+        [
+          {
+            "node": "Get Companies To Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Companies To Report": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Companies",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Summary Email": {
+      "main": [
+        [
+          {
+            "node": "Send Report Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Closed Drives Only": {
+      "main": [
+        [
+          {
+            "node": "Mark Final Report Sent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Current Company": {
+      "main": [
+        [
+          {
+            "node": "Read Registration Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Registration Status": {
+      "main": [
+        [
+          {
+            "node": "Compute Company Stats",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compute Company Stats": {
+      "main": [
+        [
+          {
+            "node": "Write Report Snapshot",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write Report Snapshot": {
+      "main": [
+        [
+          {
+            "node": "Keep Stats",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Keep Stats": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Companies",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Companies": {
+      "main": [
+        [
+          {
+            "node": "Build Summary Email",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Closed Drives Only",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Current Company",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timezone": "Asia/Kolkata"
+  },
+  "versionId": "ba859b4f-28e6-4a0f-b804-89f9046b7887",
+  "meta": {
+    "instanceId": "31a7e414baaffa8030187dcb8248d1a76e9c265ebc5b7ae1110474fb7a526eaa"
+  },
+  "nodeGroups": [
+    {
+      "id": "2e1e31eb-9486-4b6e-a6a4-80a829e6e374",
+      "name": "Compile company reports",
+      "nodeIds": [
+        "b1640909-c620-46b9-957a-ff9f9a00eb0b",
+        "ff850b5c-a960-4ab4-86c8-78bda429a13b",
+        "7cbb2bd4-bcf8-413b-9f67-655d4c2c7c69",
+        "67f61be1-99d8-40ca-9f80-691d8720c98f",
+        "ce4feda8-c142-485a-8761-d7fd36d798cb",
+        "5928bb8c-3d62-4ecc-89e8-c19176d5de47",
+        "7c55284e-e7bc-40aa-bd23-9ba12b913f21",
+        "8eb38c71-0ec2-4d38-8511-dccc0bb8b0c4",
+        "75e3f38c-55bb-4a40-a945-16330f6b4813",
+        "f7961326-6577-436e-a060-50ee304522be",
+        "9088dd0d-6686-428e-8eb5-3341990d927e"
+      ],
+      "description": "Daily per-drive stats into each company sheet, one summary email, and drives past deadline marked as final-reported"
+    }
+  ],
+  "id": "GLYtbFGMogD8eXTO",
+  "tags": []
+}
